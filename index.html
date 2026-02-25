@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Stock Sim</title>
+</head>
+<body>
+  <h1>StockDash</h1>
+  <button id="login">Sign in with Google</button>
+  <p id="user"></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const supabaseUrl = "https://qdzsdflucgnkmbppbsse.supabase.co";
+    const supabaseKey = "sb_publishable_MfYiIj7P3uRBRltC8EudcA_o_rqIxCr";
+
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    document.getElementById("login").addEventListener("click", async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+      });
+    });
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        document.getElementById("user").innerText =
+          "Logged in as " + data.user.email;
+      }
+    });
+  </script>
+</body>
+</html>
