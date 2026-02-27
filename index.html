@@ -13,6 +13,7 @@
 
   <div id="app-section" style="display:none;">
     <p id="user"></p>
+    <button id="addMoney">Add $100</button>
     <button id="logout">Logout</button>
   </div>
 
@@ -25,9 +26,13 @@
 
     const loginBtn = document.getElementById("login");
     const logoutBtn = document.getElementById("logout");
+    const addMoneyBtn = document.getElementById("addMoney");
+
     const authSection = document.getElementById("auth-section");
     const appSection = document.getElementById("app-section");
     const userText = document.getElementById("user");
+
+    let currentUser = null;
 
     loginBtn.addEventListener("click", async () => {
       await client.auth.signInWithOAuth({
@@ -38,6 +43,25 @@
     logoutBtn.addEventListener("click", async () => {
       await client.auth.signOut();
       location.reload();
+    });
+
+    addMoneyBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+
+      const { data } = await client
+        .from("profiles")
+        .select("balance")
+        .eq("id", currentUser.id)
+        .single();
+
+      const newBalance = Number(data.balance) + 100;
+
+      await client
+        .from("profiles")
+        .update({ balance: newBalance })
+        .eq("id", currentUser.id);
+
+      await loadProfile(currentUser);
     });
 
     async function ensureProfile(user) {
@@ -73,6 +97,7 @@
       const { data: { session } } = await client.auth.getSession();
 
       if (session && session.user) {
+        currentUser = session.user;
         await ensureProfile(session.user);
         await loadProfile(session.user);
       }
