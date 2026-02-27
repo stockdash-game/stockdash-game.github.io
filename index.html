@@ -49,16 +49,20 @@
     });
 
     buyBtn.addEventListener("click", async () => {
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log("No current user.");
+        return;
+      }
 
       const balance = await calculateBalance();
+      console.log("Current balance:", balance);
 
       if (balance < 100) {
         alert("Not enough cash!");
         return;
       }
 
-      await client.from("transactions").insert({
+      const { error } = await client.from("transactions").insert({
         user_id: currentUser.id,
         symbol: "AAPL",
         shares: 1,
@@ -66,14 +70,26 @@
         type: "buy"
       });
 
+      if (error) {
+        console.error("Insert error:", error);
+        alert("Database error. Check console.");
+        return;
+      }
+
+      console.log("Buy successful.");
       await loadDashboard();
     });
 
     async function calculateBalance() {
-      const { data } = await client
+      const { data, error } = await client
         .from("transactions")
         .select("*")
         .eq("user_id", currentUser.id);
+
+      if (error) {
+        console.error("Fetch error:", error);
+        return 0;
+      }
 
       let totalSpent = 0;
 
