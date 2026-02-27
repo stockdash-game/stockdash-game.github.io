@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>StockDash</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 <body>
   <h1>StockDash</h1>
@@ -28,6 +29,7 @@
     const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     const STARTING_CASH = 10000;
+    const STOCK_PRICE = 100;
 
     const loginBtn = document.getElementById("login");
     const logoutBtn = document.getElementById("logout");
@@ -39,26 +41,27 @@
 
     let currentUser = null;
 
-    loginBtn.addEventListener("click", async () => {
+    // ---------- AUTH ----------
+
+    loginBtn.onclick = async () => {
       await client.auth.signInWithOAuth({ provider: "google" });
-    });
+    };
 
-    logoutBtn.addEventListener("click", async () => {
+    logoutBtn.onclick = async () => {
       await client.auth.signOut();
-      location.reload();
-    });
+      currentUser = null;
+      showAuth();
+    };
 
-    buyBtn.addEventListener("click", async () => {
-      if (!currentUser) {
-        console.log("No current user.");
-        return;
-      }
+    // ---------- BUY STOCK ----------
+
+    buyBtn.onclick = async () => {
+      if (!currentUser) return;
 
       const balance = await calculateBalance();
-      console.log("Current balance:", balance);
 
-      if (balance < 100) {
-        alert("Not enough cash!");
+      if (balance < STOCK_PRICE) {
+        alert("Not enough cash.");
         return;
       }
 
@@ -66,66 +69,83 @@
         user_id: currentUser.id,
         symbol: "AAPL",
         shares: 1,
-        price: 100,
+        price: STOCK_PRICE,
         type: "buy"
       });
 
       if (error) {
-        console.error("Insert error:", error);
-        alert("Database error. Check console.");
+        alert("Transaction failed.");
         return;
       }
 
-      console.log("Buy successful.");
       await loadDashboard();
-    });
+    };
+
+    // ---------- BALANCE LOGIC ----------
 
     async function calculateBalance() {
       const { data, error } = await client
         .from("transactions")
-        .select("*")
+        .select("shares, price, type")
         .eq("user_id", currentUser.id);
 
-      if (error) {
-        console.error("Fetch error:", error);
-        return 0;
-      }
+      if (error || !data) return 0;
 
-      let totalSpent = 0;
+      let net = 0;
 
       data.forEach(tx => {
-        if (tx.type === "buy") {
-          totalSpent += tx.price * tx.shares;
-        }
-        if (tx.type === "sell") {
-          totalSpent -= tx.price * tx.shares;
-        }
+        const amount = tx.price * tx.shares;
+        net += tx.type === "buy" ? amount : -amount;
       });
 
-      return STARTING_CASH - totalSpent;
+      return STARTING_CASH - net;
     }
+
+    // ---------- UI ----------
 
     async function loadDashboard() {
       const balance = await calculateBalance();
 
       userText.innerText =
-        "Logged in as " + currentUser.email +
-        " | Cash: $" + balance.toFixed(2);
+        `Logged in as ${currentUser.email} | Cash: $${balance.toFixed(2)}`;
 
+      showApp();
+    }
+
+    function showAuth() {
+      authSection.style.display = "block";
+      appSection.style.display = "none";
+    }
+
+    function showApp() {
       authSection.style.display = "none";
       appSection.style.display = "block";
     }
 
-    async function checkSession() {
+    // ---------- SESSION CHECK ----------
+
+    async function init() {
       const { data: { session } } = await client.auth.getSession();
 
       if (session && session.user) {
         currentUser = session.user;
         await loadDashboard();
+      } else {
+        showAuth();
       }
+
+      client.auth.onAuthStateChange(async (_event, session) => {
+        if (session && session.user) {
+          currentUser = session.user;
+          await loadDashboard();
+        } else {
+          currentUser = null;
+          showAuth();
+        }
+      });
     }
 
-    checkSession();
+    init();
   </script>
 </body>
 </html>
