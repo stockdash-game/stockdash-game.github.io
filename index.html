@@ -2,37 +2,83 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Stock Sim</title>
+  <title>StockDash</title>
 </head>
 <body>
   <h1>StockDash</h1>
-  <button id="login">Sign in with Google</button>
-  <p id="user"></p>
+
+  <div id="auth-section">
+    <button id="login">Sign in with Google</button>
+  </div>
+
+  <div id="app-section" style="display:none;">
+    <p id="user"></p>
+    <button id="logout">Logout</button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const supabaseUrl = "https://qdzsdflucgnkmbppbsse.supabase.co";
     const supabaseKey = "sb_publishable_MfYiIj7P3uRBRltC8EudcA_o_rqIxCr";
 
-    // Use the global supabase object provided by the CDN
     const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    document.getElementById("login").addEventListener("click", async () => {
+    const loginBtn = document.getElementById("login");
+    const logoutBtn = document.getElementById("logout");
+    const authSection = document.getElementById("auth-section");
+    const appSection = document.getElementById("app-section");
+    const userText = document.getElementById("user");
+
+    loginBtn.addEventListener("click", async () => {
       await client.auth.signInWithOAuth({
         provider: "google",
       });
     });
 
-    async function checkUser() {
-      const { data: { user } } = await client.auth.getUser();
+    logoutBtn.addEventListener("click", async () => {
+      await client.auth.signOut();
+      location.reload();
+    });
 
-      if (user) {
-        document.getElementById("user").innerText =
-          "Logged in as " + user.email;
+    async function ensureProfile(user) {
+      const { data } = await client
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (!data) {
+        await client.from("profiles").insert({
+          id: user.id,
+          email: user.email,
+        });
       }
     }
 
-    checkUser();
+    async function loadProfile(user) {
+      const { data } = await client
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      userText.innerText =
+        "Logged in as " + user.email + " | Balance: $" + data.balance;
+
+      authSection.style.display = "none";
+      appSection.style.display = "block";
+    }
+
+    async function checkSession() {
+      const { data: { session } } = await client.auth.getSession();
+
+      if (session && session.user) {
+        await ensureProfile(session.user);
+        await loadProfile(session.user);
+      }
+    }
+
+    checkSession();
   </script>
 </body>
 </html>
