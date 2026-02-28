@@ -15,8 +15,9 @@
   <div id="app-section" style="display:none;">
     <p id="user"></p>
 
-    <h3>Buy Test Stock</h3>
-    <button id="buyStock">Buy 1 Share of AAPL ($100)</button>
+    <h3>Buy AAPL (Live Price)</h3>
+    <p id="livePrice">Fetching live price...</p>
+    <button id="buyStock">Buy 1 Share of AAPL</button>
 
     <button id="logout">Logout</button>
   </div>
@@ -28,7 +29,8 @@
 
     const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    const STOCK_PRICE = 100;
+    const FUNCTION_URL =
+      "https://qdzsdflucgnkmbppbsse.supabase.co/functions/v1/get-stock-price";
 
     const loginBtn = document.getElementById("login");
     const logoutBtn = document.getElementById("logout");
@@ -37,8 +39,40 @@
     const authSection = document.getElementById("auth-section");
     const appSection = document.getElementById("app-section");
     const userText = document.getElementById("user");
+    const livePriceText = document.getElementById("livePrice");
 
     let currentUser = null;
+    let currentPrice = 0;
+
+    // ---------- FETCH LIVE PRICE ----------
+
+    async function getStockPrice(symbol) {
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol })
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        console.error(data.error);
+        return null;
+      }
+
+      return data.c; // current price
+    }
+
+    async function refreshLivePrice() {
+      const price = await getStockPrice("AAPL");
+
+      if (price) {
+        currentPrice = price;
+        livePriceText.innerText = `AAPL Live Price: $${price.toFixed(2)}`;
+      } else {
+        livePriceText.innerText = "Failed to fetch price.";
+      }
+    }
 
     // ---------- AUTH ----------
 
@@ -57,9 +91,16 @@
     buyBtn.onclick = async () => {
       if (!currentUser) return;
 
+      await refreshLivePrice();
+
+      if (!currentPrice) {
+        alert("Could not fetch live price.");
+        return;
+      }
+
       const balance = await calculateBalance();
 
-      if (balance < STOCK_PRICE) {
+      if (balance < currentPrice) {
         alert("Not enough cash.");
         return;
       }
@@ -68,7 +109,7 @@
         user_id: currentUser.id,
         symbol: "AAPL",
         shares: 1,
-        price: STOCK_PRICE,
+        price: currentPrice,
         type: "buy"
       });
 
@@ -83,27 +124,22 @@
     // ---------- BALANCE CALCULATION ----------
 
     async function calculateBalance() {
-      // 1. Get base balance from profiles
-      const { data: profile, error: profileError } = await client
+      const { data: profile } = await client
         .from("profiles")
         .select("balance")
         .eq("id", currentUser.id)
         .single();
 
-      if (profileError || !profile) return 0;
+      if (!profile) return 0;
 
-      // 2. Get transaction history
-      const { data: transactions, error: txError } = await client
+      const { data: transactions } = await client
         .from("transactions")
         .select("shares, price, type")
         .eq("user_id", currentUser.id);
 
-      if (txError || !transactions) return profile.balance;
-
-      // 3. Calculate net transaction effect
       let net = 0;
 
-      transactions.forEach(tx => {
+      transactions?.forEach(tx => {
         const amount = tx.price * tx.shares;
         net += tx.type === "buy" ? amount : -amount;
       });
@@ -119,6 +155,7 @@
       userText.innerText =
         `Logged in as ${currentUser.email} | Cash: $${balance.toFixed(2)}`;
 
+      await refreshLivePrice();
       showApp();
     }
 
@@ -139,7 +176,7 @@
 
       if (session && session.user) {
         currentUser = session.user;
-        await loadDashboard(); // always fetch fresh data on reload
+        await loadDashboard();
       } else {
         showAuth();
       }
