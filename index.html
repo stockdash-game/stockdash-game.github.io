@@ -53,31 +53,39 @@
         body: JSON.stringify({ symbol })
       });
 
-      const data = await res.json();
-
-      if (data.error) {
-        console.error(data.error);
-        return null;
+      if (!res.ok) {
+        throw new Error("Function request failed");
       }
 
-      return data.c; // current price
+      const data = await res.json();
+      return data.c ?? null;
     }
 
     async function refreshLivePrice() {
-      const price = await getStockPrice("AAPL");
+      try {
+        const price = await getStockPrice("AAPL");
 
-      if (price) {
-        currentPrice = price;
-        livePriceText.innerText = `AAPL Live Price: $${price.toFixed(2)}`;
-      } else {
-        livePriceText.innerText = "Failed to fetch price.";
+        if (price) {
+          currentPrice = price;
+          livePriceText.innerText = `AAPL Live Price: $${price.toFixed(2)}`;
+        } else {
+          livePriceText.innerText = "Live price unavailable.";
+        }
+      } catch (err) {
+        console.error("Price fetch failed:", err);
+        livePriceText.innerText = "Live price unavailable.";
       }
     }
 
     // ---------- AUTH ----------
 
     loginBtn.onclick = async () => {
-      await client.auth.signInWithOAuth({ provider: "google" });
+      await client.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
     };
 
     logoutBtn.onclick = async () => {
@@ -155,8 +163,8 @@
       userText.innerText =
         `Logged in as ${currentUser.email} | Cash: $${balance.toFixed(2)}`;
 
-      await refreshLivePrice();
-      showApp();
+      await refreshLivePrice(); // safe now
+      showApp(); // always runs
     }
 
     function showAuth() {
